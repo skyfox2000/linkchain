@@ -1,0 +1,227 @@
+//! IP黑名单过滤挂件
+//!
+//! 检查IP地址是否在黑名单中，如果在则拒绝执行
+
+use crate::chainware::config::ChainwareConfig;
+use crate::chainware::core::Chainware;
+use crate::core::{ExecutionStatus, RequestContext, ResponseContext};
+use crate::types::{error_codes, ErrorResponse};
+use serde_json::Value;
+use std::net::IpAddr;
+
+/// IP黑名单过滤挂件
+pub struct IpBlacklistChainware {
+    name: String,
+}
+
+impl Default for IpBlacklistChainware {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl IpBlacklistChainware {
+    pub fn new() -> Self {
+        Self {
+            name: "ip_blacklist".to_string(),
+        }
+    }
+
+    /// 检查IP是否在黑名单中
+    fn is_ip_in_blacklist(&self, ip: &str, blacklist: &[String]) -> Result<bool, String> {
+        // 解析IP地址
+        let target_ip: IpAddr = ip.parse().map_err(|_| format!("无效的IP地址: {}", ip))?;
+
+        // 检查是否在黑名单中
+        for blacklist_ip in blacklist {
+            // 支持单个IP和CIDR格式
+            if blacklist_ip.contains('/') {
+                // CIDR格式处理
+                if self.ip_in_cidr(&target_ip, blacklist_ip)? {
+                    return Ok(true);
+                }
+            } else {
+                // 单个IP地址比较
+                let black_ip: IpAddr = blacklist_ip
+                    .parse()
+                    .map_err(|_| format!("黑名单中的无效IP地址: {}", blacklist_ip))?;
+                if target_ip == black_ip {
+                    return Ok(true);
+                }
+            }
+        }
+
+        Ok(false)
+    }
+
+    /// 检查IP是否在CIDR网段中
+    fn ip_in_cidr(&self, ip: &IpAddr, cidr: &str) -> Result<bool, String> {
+        let parts: Vec<&str> = cidr.split('/').collect();
+        if parts.len() != 2 {
+            return Err(format!("无效的CIDR格式: {}", cidr));
+        }
+
+        let network_ip: IpAddr = parts[0]
+            .parse()
+            .map_err(|_| format!("CIDR中的无效IP地址: {}", parts[0]))?;
+        let prefix_len: u8 = parts[1]
+            .parse()
+            .map_err(|_| format!("CIDR中的无效前缀长度: {}", parts[1]))?;
+
+        match (ip, network_ip) {
+            (IpAddr::V4(ip4), IpAddr::V4(net4)) => {
+                if prefix_len > 32 {
+                    return Err("IPv4前缀长度不能超过32".to_string());
+                }
+                let mask = if prefix_len == 0 {
+                    0
+                } else {
+                    !0u32 << (32 - prefix_len)
+                };
+                Ok((u32::from(*ip4) & mask) == (u32::from(net4) & mask))
+            }
+            (IpAddr::V6(ip6), IpAddr::V6(net6)) => {
+                if prefix_len > 128 {
+                    return Err("IPv6前缀长度不能超过128".to_string());
+                }
+                let ip_bytes = ip6.octets();
+                let net_bytes = net6.octets();
+                let full_bytes = prefix_len / 8;
+                let remaining_bits = prefix_len % 8;
+
+                // 比较完整字节
+                for i in 0..full_bytes as usize {
+                    if ip_bytes[i] != net_bytes[i] {
+                        return Ok(false);
+                    }
+                }
+
+                // 比较剩余位
+                if remaining_bits > 0 {
+                    let mask = 0xFF << (8 - remaining_bits);
+                    let idx = full_bytes as usize;
+                    if idx < 16 && (ip_bytes[idx] & mask) != (net_bytes[idx] & mask) {
+                        return Ok(false);
+                    }
+                }
+
+                Ok(true)
+            }
+            _ => Err("IP地址类型不匹配".to_string()),
+        }
+    }
+}
+
+impl Chainware for IpBlacklistChainware {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn process(
+        &self,
+        request: &RequestContext,
+        response: &mut ResponseContext,
+        data: Option<serde_json::Value>,
+        config: Option<&ChainwareConfig>,
+    ) -> Option<serde_json::Value> {
+        let input = data.unwrap_or_default();
+
+        // 从配置中获取IP黑名单
+        let ip_list: Vec<String> = match config.and_then(|cfg| cfg.config.get("ip_list")) {
+            Some(Value::String(ip_str)) => {
+                // 支持逗号分割的字符串格式
+                ip_str
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect::<Vec<String>>()
+            }
+            Some(_) => {
+                response.status = ExecutionStatus::Error;
+                response.data = Some(
+                    ErrorResponse::new(
+                        error_codes::CONFIG_ERROR,
+                        "ip_list配置只能是字符串类型".to_string(),
+                        None,
+                    )
+                    .to_json(),
+                );
+                return Some(input); // 数据透传
+            }
+            None => {
+                response.status = ExecutionStatus::Error;
+                response.data = Some(
+                    ErrorResponse::new(
+                        error_codes::CONFIG_ERROR,
+                        "缺少ip_list配置".to_string(),
+                        None,
+                    )
+                    .to_json(),
+                );
+                return Some(input); // 数据透传
+            }
+        };
+
+        // 从meta中获取IP地址
+        let ip_address = match request.meta.get("ip_address") {
+            Some(Value::String(ip)) => ip,
+            Some(_) => {
+                response.status = ExecutionStatus::Reject;
+                response.data = Some(
+                    ErrorResponse::new(
+                        error_codes::FORBIDDEN,
+                        "meta中的ip_address必须是字符串类型".to_string(),
+                        None,
+                    )
+                    .to_json(),
+                );
+                return None;
+            }
+            None => {
+                response.status = ExecutionStatus::Reject;
+                response.data = Some(
+                    ErrorResponse::new(
+                        error_codes::FORBIDDEN,
+                        "meta中缺少ip_address".to_string(),
+                        None,
+                    )
+                    .to_json(),
+                );
+                return None;
+            }
+        };
+
+        // 检查IP是否在黑名单中
+        match self.is_ip_in_blacklist(ip_address, &ip_list) {
+            Ok(true) => {
+                // IP在黑名单中，拒绝执行
+                response.status = ExecutionStatus::Reject;
+                response.data = Some(
+                    ErrorResponse::new(
+                        error_codes::FORBIDDEN,
+                        format!("IP地址 {} 在黑名单中", ip_address),
+                        None,
+                    )
+                    .to_json(),
+                );
+                None
+            }
+            Ok(false) => {
+                // IP不在黑名单中，继续执行
+                Some(input)
+            }
+            Err(err) => {
+                response.status = ExecutionStatus::Error;
+                response.data = Some(
+                    ErrorResponse::new(
+                        error_codes::INTERNAL_ERROR,
+                        format!("IP黑名单检查失败: {}", err),
+                        None,
+                    )
+                    .to_json(),
+                );
+                None
+            }
+        }
+    }
+}
