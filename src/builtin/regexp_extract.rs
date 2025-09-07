@@ -4,7 +4,7 @@
 
 use crate::chainware::config::ChainwareConfig;
 use crate::chainware::core::Chainware;
-use crate::core::{ExecutionStatus, RequestContext, ResponseContext};
+use crate::core::{ChainStatus, ChainRequest, ChainResponse};
 use crate::types::{error_codes, ErrorResponse};
 use regex::Regex;
 use serde_json::Value;
@@ -83,8 +83,8 @@ impl Chainware for RegexpExtractChainware {
 
     fn process(
         &self,
-        _request: &RequestContext,
-        response: &mut ResponseContext,
+        _request: &ChainRequest,
+        response: &mut ChainResponse,
         data: Option<serde_json::Value>,
         config: Option<&ChainwareConfig>,
     ) -> Option<serde_json::Value> {
@@ -94,7 +94,7 @@ impl Chainware for RegexpExtractChainware {
         let pattern = match config.and_then(|cfg| cfg.config.get("pattern")) {
             Some(Value::String(p)) => Some(p.as_str()),
             Some(_) => {
-                response.status = ExecutionStatus::Error;
+                response.status = ChainStatus::Error;
                 response.data = Some(
                     ErrorResponse::new(
                         error_codes::CONFIG_ERROR,
@@ -111,7 +111,7 @@ impl Chainware for RegexpExtractChainware {
         match self.process_regexp_extract(&input, pattern) {
             Ok(result) => Some(result),
             Err(err) => {
-                response.status = ExecutionStatus::Error;
+                response.status = ChainStatus::Error;
                 response.data = Some(
                     ErrorResponse::new(
                         error_codes::INTERNAL_ERROR,

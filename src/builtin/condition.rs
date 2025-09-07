@@ -4,7 +4,7 @@
 
 use crate::chainware::config::ChainwareConfig;
 use crate::chainware::core::Chainware;
-use crate::core::{ExecutionStatus, RequestContext, ResponseContext};
+use crate::core::{ChainStatus, ChainRequest, ChainResponse};
 use crate::types::{error_codes, ErrorResponse};
 use crate::utils::json_path::JsonPathTemplate;
 use regex::Regex;
@@ -435,8 +435,8 @@ impl Chainware for ConditionChainware {
 
     fn process(
         &self,
-        request: &RequestContext,
-        response: &mut ResponseContext,
+        request: &ChainRequest,
+        response: &mut ChainResponse,
         data: Option<serde_json::Value>,
         config: Option<&ChainwareConfig>,
     ) -> Option<serde_json::Value> {
@@ -453,7 +453,7 @@ impl Chainware for ConditionChainware {
         }) {
             Some(Value::String(cond)) => cond,
             Some(_) => {
-                response.status = ExecutionStatus::Error;
+                response.status = ChainStatus::Error;
                 response.data = Some(
                     ErrorResponse::new(
                         error_codes::CONFIG_ERROR,
@@ -465,7 +465,7 @@ impl Chainware for ConditionChainware {
                 return None;
             }
             None => {
-                response.status = ExecutionStatus::Error;
+                response.status = ChainStatus::Error;
                 response.data = Some(
                     ErrorResponse::new(error_codes::CONFIG_ERROR, "缺少条件配置".to_string(), None)
                         .to_json(),
@@ -482,7 +482,7 @@ impl Chainware for ConditionChainware {
             }
             Ok(false) => {
                 // 条件不通过，拒绝执行
-                response.status = ExecutionStatus::Reject;
+                response.status = ChainStatus::Reject;
                 response.data = Some(
                     ErrorResponse::new(
                         error_codes::CONDITION_NOT_MET,
@@ -495,7 +495,7 @@ impl Chainware for ConditionChainware {
             }
             Err(err) => {
                 // 检查出错
-                response.status = ExecutionStatus::Error;
+                response.status = ChainStatus::Error;
                 response.data = Some(
                     ErrorResponse::new(
                         error_codes::INTERNAL_ERROR,

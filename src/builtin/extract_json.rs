@@ -4,7 +4,7 @@
 
 use crate::chainware::core::Chainware;
 use crate::chainware::config::ChainwareConfig;
-use crate::core::{RequestContext, ResponseContext};
+use crate::core::{ChainRequest, ChainResponse};
 use crate::types::{error_codes, ErrorResponse};
 use serde_json::Value;
 
@@ -124,8 +124,8 @@ impl Chainware for ExtractJsonChainware {
 
     fn process(
         &self,
-        _request: &RequestContext,
-        response: &mut ResponseContext,
+        _request: &ChainRequest,
+        response: &mut ChainResponse,
         data: Option<serde_json::Value>,
         _config: Option<&ChainwareConfig>,
     ) -> Option<serde_json::Value> {

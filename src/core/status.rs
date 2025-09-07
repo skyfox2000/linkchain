@@ -5,7 +5,7 @@
 /// 执行状态枚举
 /// 核心状态为 Continue，执行器根据状态判断是否继续执行
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ExecutionStatus {
+pub enum ChainStatus {
     /// 继续执行（核心状态）
     Continue,
     /// 执行完成

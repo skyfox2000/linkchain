@@ -1,3 +1,4 @@
+README.md
 # LinkChain - 轻量级链执行器
 
 LinkChain 是一个轻量级的链执行器，专为简单、高效的数据处理管道而设计。通过配置驱动的挂件系统，实现数据在挂件之间的流式处理。
@@ -79,7 +80,7 @@ String.endsWith($.email, "@company.com") # 字符串函数
 ### 基本用法
 
 ```rust
-use linkchain::{ChainExecutor, RequestContext, ChainwareConfig};
+use linkchain::{ChainExecutor, ChainRequest, ChainwareConfig};
 use serde_json::json;
 use std::collections::HashMap;
 
@@ -89,16 +90,16 @@ let mut executor = ChainExecutor::new();
 // 添加条件判断挂件
 let mut condition_config = HashMap::new();
 condition_config.insert("expression".to_string(), json!("$.age >= 18"));
-executor = executor.add_chainware("condition", None, Some(ChainwareConfig { config: condition_config }));
+executor = executor.insert_chainware("condition", None, None, Some(ChainwareConfig { config: condition_config })).unwrap();
 
 // 添加日志记录挂件
 let mut logger_config = HashMap::new();
 logger_config.insert("template".to_string(), json!("用户 ${$.name} 已验证，年龄: ${$.age}"));
-executor = executor.add_chainware("logger", None, Some(ChainwareConfig { config: logger_config }));
+executor = executor.insert_chainware("logger", None, None, Some(ChainwareConfig { config: logger_config })).unwrap();
 
 // 创建请求上下文
 let input_data = json!({"name": "张三", "age": 25, "city": "北京"});
-let context = RequestContext::new(input_data);
+let context = ChainRequest::new(input_data, HashMap::new());
 
 // 执行链
 let response = executor.execute(context);
@@ -110,6 +111,74 @@ match response.status {
     ExecutionStatus::Reject => println!("执行被拒绝"),
     _ => println!("其他状态: {:?}", response.status),
 }
+```
+
+### 插入挂件到指定位置
+
+```rust
+use linkchain::{ChainExecutor, ChainRequest, ChainwareConfig};
+use serde_json::json;
+use std::collections::HashMap;
+
+// 创建链执行器
+let mut executor = ChainExecutor::new();
+
+// 添加条件判断挂件
+let mut condition_config = HashMap::new();
+condition_config.insert("expression".to_string(), json!("$.age >= 18"));
+executor = executor.insert_chainware("condition", None, None, Some(ChainwareConfig { config: condition_config })).unwrap();
+
+// 插入日志记录挂件到开头
+let mut logger_config = HashMap::new();
+logger_config.insert("template".to_string(), json!("开始处理用户数据"));
+executor = executor.insert_chainware("logger", Some(0), None, Some(ChainwareConfig { config: logger_config })).unwrap();
+
+// 插入另一个日志记录挂件到末尾（默认位置）
+let mut final_logger_config = HashMap::new();
+final_logger_config.insert("template".to_string(), json!("处理完成"));
+executor = executor.insert_chainware("logger", None, None, Some(ChainwareConfig { config: final_logger_config })).unwrap();
+
+// 创建请求上下文
+let input_data = json!({"name": "张三", "age": 25, "city": "北京"});
+let context = ChainRequest::new(input_data, HashMap::new());
+
+// 执行链
+let response = executor.execute(context);
+```
+
+### 批量添加挂件
+
+```rust
+use linkchain::{ChainExecutor, ChainRequest};
+use serde_json::json;
+use std::collections::HashMap;
+
+// 创建链执行器
+let mut executor = ChainExecutor::new();
+
+// 批量添加挂件（通过JSON数组配置）
+let configs = json!([
+  {
+    "name": "condition",
+    "config": {
+      "expression": "$.age >= 18"
+    }
+  },
+  {
+    "name": "logger",
+    "config": {
+      "template": "处理用户数据: ${$.username}"
+    }
+  }
+]);
+executor = executor.add_chainwares(configs).unwrap();
+
+// 创建请求上下文
+let input_data = json!({"username": "张三", "age": 25});
+let context = ChainRequest::new(input_data, HashMap::new());
+
+// 执行链
+let response = executor.execute(context);
 ```
 
 ## 内置挂件详细配置
@@ -587,7 +656,7 @@ config.insert("ip_list".to_string(), json!("127.0.0.1,::1,192.168.1.0/24,10.0.0.
 ### 用户认证和权限检查链
 
 ```rust
-use linkchain::{ChainExecutor, RequestContext, ChainwareConfig};
+use linkchain::{ChainExecutor, ChainRequest, ChainwareConfig};
 use serde_json::json;
 use std::collections::HashMap;
 
@@ -597,28 +666,28 @@ fn create_auth_chain() -> ChainExecutor {
     // 1. IP白名单检查
     let mut ip_config = HashMap::new();
     ip_config.insert("ip_list".to_string(), json!("192.168.0.0/16,10.0.0.0/8,127.0.0.1"));
-    executor = executor.add_chainware("ip_whitelist", None, 
-        Some(ChainwareConfig { config: ip_config }));
+    executor = executor.insert_chainware("ip_whitelist", None, None,
+        Some(ChainwareConfig { config: ip_config })).unwrap();
 
     // 2. 用户名格式验证
     let mut username_config = HashMap::new();
     username_config.insert("pattern".to_string(), json!(r"^[a-zA-Z0-9_]{3,20}$"));
-    executor = executor.add_chainware("regexp_condition", None, 
-        Some(ChainwareConfig { config: username_config }));
+    executor = executor.insert_chainware("regexp_condition", None, None,
+        Some(ChainwareConfig { config: username_config })).unwrap();
 
     // 3. 用户角色权限检查
     let mut role_config = HashMap::new();
     role_config.insert("expression".to_string(), 
         json!("$.role == \"admin\" || $.role == \"moderator\" || ($.role == \"user\" && $.verified == true)"));
-    executor = executor.add_chainware("condition", None, 
-        Some(ChainwareConfig { config: role_config }));
+    executor = executor.insert_chainware("condition", None, None,
+        Some(ChainwareConfig { config: role_config })).unwrap();
 
     // 4. 记录认证日志
     let mut log_config = HashMap::new();
     log_config.insert("template".to_string(), 
         json!("用户认证成功: 用户=${$.username}, 角色=${$.role}, IP=${$meta.ip_address}, 时间=${$meta.timestamp}"));
-    executor = executor.add_chainware("logger", None, 
-        Some(ChainwareConfig { config: log_config }));
+    executor = executor.insert_chainware("logger", None, None,
+        Some(ChainwareConfig { config: log_config })).unwrap();
 
     // 5. 提取用户信息
     let mut extract_config = HashMap::new();
@@ -631,8 +700,8 @@ fn create_auth_chain() -> ChainExecutor {
         "client_ip": "$meta.ip_address",
         "session_id": "$meta.session_id"
     }));
-    executor = executor.add_chainware("extract_map", None, 
-        Some(ChainwareConfig { config: extract_config }));
+    executor = executor.insert_chainware("extract_map", None, None,
+        Some(ChainwareConfig { config: extract_config })).unwrap();
 
     executor
 }
@@ -649,7 +718,7 @@ fn main() {
         "permissions": ["read", "write", "delete"]
     });
     
-    let mut context = RequestContext::new(input_data);
+    let mut context = ChainRequest::new(input_data, HashMap::new());
     context.meta.insert("ip_address".to_string(), json!("192.168.1.100"));
     context.meta.insert("timestamp".to_string(), json!("2024-01-01T10:00:00Z"));
     context.meta.insert("session_id".to_string(), json!("session_12345"));
@@ -684,27 +753,27 @@ fn create_data_processing_chain() -> ChainExecutor {
     let mut format_config = HashMap::new();
     format_config.insert("expression".to_string(), 
         json!("Chain.isObject($.data) && Chain.isString($.data.email) && Chain.isNumber($.data.age)"));
-    executor = executor.add_chainware("condition", None, 
-        Some(ChainwareConfig { config: format_config }));
+    executor = executor.insert_chainware("condition", None, None,
+        Some(ChainwareConfig { config: format_config })).unwrap();
 
     // 2. 邮箱格式验证
     let mut email_config = HashMap::new();
     email_config.insert("pattern".to_string(), 
         json!(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"));
-    executor = executor.add_chainware("regexp_condition", None, 
-        Some(ChainwareConfig { config: email_config }));
+    executor = executor.insert_chainware("regexp_condition", None, None,
+        Some(ChainwareConfig { config: email_config })).unwrap();
 
     // 3. 年龄范围检查
     let mut age_config = HashMap::new();
     age_config.insert("expression".to_string(), json!("$.data.age >= 18 && $.data.age <= 120"));
-    executor = executor.add_chainware("condition", None, 
-        Some(ChainwareConfig { config: age_config }));
+    executor = executor.insert_chainware("condition", None, None,
+        Some(ChainwareConfig { config: age_config })).unwrap();
 
     // 4. 合并默认配置
     let mut merge_config = HashMap::new();
     merge_config.insert("data_path".to_string(), json!("$params.default_settings"));
-    executor = executor.add_chainware("merge", None, 
-        Some(ChainwareConfig { config: merge_config }));
+    executor = executor.insert_chainware("merge", None, None,
+        Some(ChainwareConfig { config: merge_config })).unwrap();
 
     // 5. 字段映射标准化
     let mut map_config = HashMap::new();
@@ -716,8 +785,8 @@ fn create_data_processing_chain() -> ChainExecutor {
         "source": "$params.source"
     }));
     map_config.insert("overwrite".to_string(), json!(false)); // 只保留映射字段
-    executor = executor.add_chainware("map_fields", None, 
-        Some(ChainwareConfig { config: map_config }));
+    executor = executor.insert_chainware("map_fields", None, None,
+        Some(ChainwareConfig { config: map_config })).unwrap();
 
     executor
 }
@@ -775,7 +844,7 @@ fn create_data_processing_chain() -> ChainExecutor {
 3. **状态控制**：遇到Error或Reject状态时链会终止执行
 4. **路径安全**：使用JSONPath时注意路径的存在性，不存在的路径返回null
 5. **配置验证**：确保配置参数类型和格式正确，错误的配置会导致挂件执行失败
-6. **元数据传递**：`$meta.ip_address`等元数据需要在创建RequestContext时设置
+6. **元数据传递**：`$meta.ip_address`等元数据需要在创建ChainRequest时设置
 7. **数据不变性**：`$params`和`$meta`在整个执行链中保持不变，只有`$.`会在挂件间流转
 
 ## 许可证

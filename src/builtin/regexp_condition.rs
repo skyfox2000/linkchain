@@ -4,7 +4,7 @@
 
 use crate::chainware::core::Chainware;
 use crate::chainware::config::ChainwareConfig;
-use crate::core::{ExecutionStatus, RequestContext, ResponseContext};
+use crate::core::{ChainStatus, ChainRequest, ChainResponse};
 use crate::types::{error_codes, ErrorResponse};
 use regex::Regex;
 use serde_json::Value;
@@ -77,8 +77,8 @@ impl Chainware for RegexpConditionChainware {
 
     fn process(
         &self,
-        _request: &RequestContext,
-        response: &mut ResponseContext,
+        _request: &ChainRequest,
+        response: &mut ChainResponse,
         data: Option<serde_json::Value>,
         config: Option<&ChainwareConfig>,
     ) -> Option<serde_json::Value> {
@@ -88,7 +88,7 @@ impl Chainware for RegexpConditionChainware {
         let pattern = match config.and_then(|cfg| cfg.config.get("pattern")) {
             Some(Value::String(p)) => Some(p.as_str()),
             Some(_) => {
-                response.status = ExecutionStatus::Error;
+                response.status = ChainStatus::Error;
                 response.data = Some(
                     ErrorResponse::new(
                         error_codes::CONFIG_ERROR,
@@ -109,7 +109,7 @@ impl Chainware for RegexpConditionChainware {
             }
             Ok(false) => {
                 // 正则匹配失败，设置拒绝状态
-                response.status = ExecutionStatus::Reject;
+                response.status = ChainStatus::Reject;
                 response.data = Some(
                     ErrorResponse::new(
                         error_codes::CONDITION_NOT_MET,
@@ -122,7 +122,7 @@ impl Chainware for RegexpConditionChainware {
             }
             Err(err) => {
                 // 正则处理错误
-                response.status = ExecutionStatus::Error;
+                response.status = ChainStatus::Error;
                 response.data = Some(
                     ErrorResponse::new(
                         error_codes::INTERNAL_ERROR,

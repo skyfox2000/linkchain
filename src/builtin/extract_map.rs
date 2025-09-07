@@ -4,7 +4,7 @@
 
 use crate::chainware::core::Chainware;
 use crate::chainware::config::ChainwareConfig;
-use crate::core::{ExecutionStatus, RequestContext, ResponseContext};
+use crate::core::{ChainStatus, ChainRequest, ChainResponse};
 use crate::types::{error_codes, ErrorResponse};
 use crate::utils::json_path::JsonPathTemplate;
 use serde_json::Value;
@@ -127,8 +127,8 @@ impl Chainware for ExtractMapChainware {
 
     fn process(
         &self,
-        request: &RequestContext,
-        response: &mut ResponseContext,
+        request: &ChainRequest,
+        response: &mut ChainResponse,
         data: Option<serde_json::Value>,
         config: Option<&ChainwareConfig>,
     ) -> Option<serde_json::Value> {
@@ -140,7 +140,7 @@ impl Chainware for ExtractMapChainware {
                 match self.validate_config(cfg) {
                     Ok(mappings) => mappings,
                     Err(err) => {
-                        response.status = ExecutionStatus::Error;
+                        response.status = ChainStatus::Error;
                         response.data = Some(
                             ErrorResponse::new(
                                 error_codes::CONFIG_ERROR,
@@ -154,7 +154,7 @@ impl Chainware for ExtractMapChainware {
                 }
             }
             None => {
-                response.status = ExecutionStatus::Error;
+                response.status = ChainStatus::Error;
                 response.data = Some(
                     ErrorResponse::new(
                         error_codes::CONFIG_ERROR,
@@ -174,7 +174,7 @@ impl Chainware for ExtractMapChainware {
         match self.process_extract_map(&input, &mappings, &context) {
             Ok(result) => Some(result),
             Err(err) => {
-                response.status = ExecutionStatus::Error;
+                response.status = ChainStatus::Error;
                 response.data = Some(
                     ErrorResponse::new(
                         error_codes::INTERNAL_ERROR,

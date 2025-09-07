@@ -12,7 +12,7 @@ pub mod utils;
 // 只公开核心API
 pub use chain::ChainExecutor;
 pub use chainware::config::ChainwareConfig;
-pub use core::{RequestContext, ResponseContext};
+pub use core::{ChainRequest, ChainResponse};
 pub use types::{ErrorResponse, error_codes};
 
 // 重新导出常用类型

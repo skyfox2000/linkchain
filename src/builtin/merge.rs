@@ -4,7 +4,7 @@
 
 use crate::chainware::config::ChainwareConfig;
 use crate::chainware::core::Chainware;
-use crate::core::{ExecutionStatus, RequestContext, ResponseContext};
+use crate::core::{ChainStatus, ChainRequest, ChainResponse};
 use crate::types::{error_codes, ErrorResponse};
 use crate::utils::json_path::JsonPathTemplate;
 use serde_json::Value;
@@ -83,8 +83,8 @@ impl Chainware for MergeChainware {
 
     fn process(
         &self,
-        request: &RequestContext,
-        response: &mut ResponseContext,
+        request: &ChainRequest,
+        response: &mut ChainResponse,
         data: Option<serde_json::Value>,
         config: Option<&ChainwareConfig>,
     ) -> Option<serde_json::Value> {
@@ -94,7 +94,7 @@ impl Chainware for MergeChainware {
         let data_path = match config.and_then(|cfg| cfg.config.get("data_path")) {
             Some(Value::String(path)) => path,
             Some(_) => {
-                response.status = ExecutionStatus::Error;
+                response.status = ChainStatus::Error;
                 response.data = Some(
                     ErrorResponse::new(
                         error_codes::CONFIG_ERROR,
@@ -113,7 +113,7 @@ impl Chainware for MergeChainware {
 
         // 检查是否存在自引用
         if data_path.starts_with("$input") || data_path.starts_with("$data") || (data_path == "$") {
-            response.status = ExecutionStatus::Error;
+            response.status = ChainStatus::Error;
             response.data = Some(
                 ErrorResponse::new(
                     error_codes::CONFIG_ERROR,
@@ -131,7 +131,7 @@ impl Chainware for MergeChainware {
         match self.process_merge(&input, data_path, &context) {
             Ok(result) => Some(result),
             Err(err) => {
-                response.status = ExecutionStatus::Error;
+                response.status = ChainStatus::Error;
                 response.data = Some(
                     ErrorResponse::new(
                         error_codes::INTERNAL_ERROR,

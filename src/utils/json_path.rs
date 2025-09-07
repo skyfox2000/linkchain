@@ -15,7 +15,7 @@ impl JsonPathTemplate {
     /// # 参数
     /// - `data`: 输入数据
     /// - `request`: 请求上下文
-    pub fn build_context(data: &Value, request: &crate::core::RequestContext) -> Value {
+    pub fn build_context(data: &Value, request: &crate::core::ChainRequest) -> Value {
         serde_json::json!({
             "__input": data,
             "__params": request.params,

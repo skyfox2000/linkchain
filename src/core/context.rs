@@ -2,31 +2,46 @@
 //!
 //! 定义请求上下文和响应上下文
 
-use crate::core::status::ExecutionStatus;
+use crate::core::status::ChainStatus;
 use crate::core::utils;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 /// 请求上下文
 /// 包含执行链所需的所有输入信息
 #[derive(Debug, Clone)]
-pub struct RequestContext {
-    /// 执行ID，用于追踪
-    pub execution_id: String,
+pub struct ChainRequest {
     /// 输入数据（JSON格式）
     pub params: serde_json::Value,
-    /// 元数据（包含所有额外信息）
+    /**
+     * 元数据（包含所有额外信息）
+     * 格式：
+     * {
+     *     "node_name": "节点名称",
+     *     "node_id": "节点ID",
+     *     "node_type": "节点类型",
+     *     "tool_name": "工具名称",
+     *     "trace_id": "全局跟踪id",
+     * }
+     */
     pub meta: HashMap<String, serde_json::Value>,
     /// 执行开始时间
     pub start_time: u64,
 }
 
-impl RequestContext {
+impl ChainRequest {
     /// 创建新的请求上下文
-    pub fn new(params: serde_json::Value) -> Self {
+    pub fn new(params: serde_json::Value, meta: HashMap<String, serde_json::Value>) -> Self {
+        let mut meta = meta;
+        // 如果meta中没有span_id，则生成一个新的
+        if !meta.contains_key("span_id") {
+            let span_id = Uuid::new_v4().to_string();
+            meta.insert("span_id".to_string(), serde_json::Value::String(span_id));
+        }
+        
         Self {
-            execution_id: utils::generate_execution_id(),
             params,
-            meta: HashMap::new(),
+            meta,
             start_time: utils::current_timestamp_ms(),
         }
     }
@@ -40,30 +55,33 @@ impl RequestContext {
 /// 响应上下文
 /// 包含执行结果和状态信息
 #[derive(Debug, Clone)]
-pub struct ResponseContext {
+pub struct ChainResponse {
     /// 执行状态
-    pub status: ExecutionStatus,
+    pub status: ChainStatus,
     /// 输出数据（JSON格式）
     pub data: Option<serde_json::Value>,
     /// 响应元数据
     pub meta: HashMap<String, serde_json::Value>,
+    /// 执行开始时间
+    pub start_time: u64,
     /// 执行结束时间
     pub end_time: u64,
 }
 
-impl ResponseContext {
+impl ChainResponse {
     /// 创建新的响应上下文
-    pub fn new() -> Self {
+    pub fn new(start_time: u64) -> Self {
         Self {
-            status: ExecutionStatus::Continue,
+            status: ChainStatus::Continue,
             data: None,
             meta: HashMap::new(),
+            start_time,
             end_time: utils::current_timestamp_ms(),
         }
     }
 
     /// 设置执行状态
-    pub fn set_status(&mut self, status: ExecutionStatus) {
+    pub fn set_status(&mut self, status: ChainStatus) {
         self.status = status;
     }
 
@@ -77,24 +95,12 @@ impl ResponseContext {
         self.meta.insert(key, value);
     }
 
-    /// 获取元数据
-    pub fn get_metadata(&self, key: &str) -> Option<&serde_json::Value> {
-        self.meta.get(key)
+    pub fn set_start_time(&mut self, start_time: u64) {
+        self.start_time = start_time;
     }
 
     /// 设置执行结束时间
     pub fn set_end_time(&mut self) {
         self.end_time = utils::current_timestamp_ms();
-    }
-
-    /// 获取执行结束时间
-    pub fn get_end_time(&self) -> u64 {
-        self.end_time
-    }
-}
-
-impl Default for ResponseContext {
-    fn default() -> Self {
-        Self::new()
     }
 }

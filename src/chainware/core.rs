@@ -3,7 +3,7 @@
 //! 定义链挂件接口和相关类型
 
 use crate::chainware::config::ChainwareConfig;
-use crate::core::{ExecutionStatus, RequestContext, ResponseContext};
+use crate::core::{ChainStatus, ChainRequest, ChainResponse};
 
 /// 链挂件接口（挂件接口）
 /// 所有挂件都需要实现这个接口
@@ -18,8 +18,8 @@ pub trait Chainware: Send + Sync {
     /// 返回：挂件的返回数据
     fn process(
         &self,
-        request: &RequestContext,
-        response: &mut ResponseContext,
+        request: &ChainRequest,
+        response: &mut ChainResponse,
         data: Option<serde_json::Value>,
         config: Option<&ChainwareConfig>,
     ) -> Option<serde_json::Value>;
@@ -40,6 +40,11 @@ impl ChainwareWrapper {
         Self { node, config }
     }
 
+    /// 获取挂件名称
+    pub fn name(&self) -> &str {
+        self.node.name()
+    }
+
     /// 检查挂件是否启用
     fn is_enabled(&self) -> bool {
         // 优先检查配置中的启用状态
@@ -51,20 +56,20 @@ impl ChainwareWrapper {
     /// 执行挂件处理
     pub fn execute(
         &self,
-        request: &RequestContext,
-        response: &mut ResponseContext,
+        request: &ChainRequest,
+        response: &mut ChainResponse,
         data: Option<serde_json::Value>,
     ) -> Option<serde_json::Value> {
         if self.is_enabled() {
             let result = self
                 .node
                 .process(request, response, data, self.config.as_ref());
-            if response.status == ExecutionStatus::Continue {
+            if response.status == ChainStatus::Continue {
                 response.data = result.clone();
             }
             result
         } else {
-            None
+            data
         }
     }
 }
@@ -72,8 +77,8 @@ impl ChainwareWrapper {
 /// 处理器函数类型定义
 type ProcessorFn = Box<
     dyn Fn(
-            &RequestContext,
-            &mut ResponseContext,
+            &ChainRequest,
+            &mut ChainResponse,
             Option<serde_json::Value>,
             Option<&ChainwareConfig>,
         ) -> Option<serde_json::Value>
@@ -98,8 +103,8 @@ impl Closureware {
     pub fn new<F>(name: String, processor: F) -> Self
     where
         F: Fn(
-                &RequestContext,
-                &mut ResponseContext,
+                &ChainRequest,
+                &mut ChainResponse,
                 Option<serde_json::Value>,
                 Option<&ChainwareConfig>,
             ) -> Option<serde_json::Value>
@@ -121,8 +126,8 @@ impl Chainware for Closureware {
 
     fn process(
         &self,
-        request: &RequestContext,
-        response: &mut ResponseContext,
+        request: &ChainRequest,
+        response: &mut ChainResponse,
         data: Option<serde_json::Value>,
         config: Option<&ChainwareConfig>,
     ) -> Option<serde_json::Value> {

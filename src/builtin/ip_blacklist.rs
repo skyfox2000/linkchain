@@ -4,7 +4,7 @@
 
 use crate::chainware::config::ChainwareConfig;
 use crate::chainware::core::Chainware;
-use crate::core::{ExecutionStatus, RequestContext, ResponseContext};
+use crate::core::{ChainStatus, ChainRequest, ChainResponse};
 use crate::types::{error_codes, ErrorResponse};
 use serde_json::Value;
 use std::net::IpAddr;
@@ -119,8 +119,8 @@ impl Chainware for IpBlacklistChainware {
 
     fn process(
         &self,
-        request: &RequestContext,
-        response: &mut ResponseContext,
+        request: &ChainRequest,
+        response: &mut ChainResponse,
         data: Option<serde_json::Value>,
         config: Option<&ChainwareConfig>,
     ) -> Option<serde_json::Value> {
@@ -137,7 +137,7 @@ impl Chainware for IpBlacklistChainware {
                     .collect::<Vec<String>>()
             }
             Some(_) => {
-                response.status = ExecutionStatus::Error;
+                response.status = ChainStatus::Error;
                 response.data = Some(
                     ErrorResponse::new(
                         error_codes::CONFIG_ERROR,
@@ -149,7 +149,7 @@ impl Chainware for IpBlacklistChainware {
                 return Some(input); // 数据透传
             }
             None => {
-                response.status = ExecutionStatus::Error;
+                response.status = ChainStatus::Error;
                 response.data = Some(
                     ErrorResponse::new(
                         error_codes::CONFIG_ERROR,
@@ -166,7 +166,7 @@ impl Chainware for IpBlacklistChainware {
         let ip_address = match request.meta.get("ip_address") {
             Some(Value::String(ip)) => ip,
             Some(_) => {
-                response.status = ExecutionStatus::Reject;
+                response.status = ChainStatus::Reject;
                 response.data = Some(
                     ErrorResponse::new(
                         error_codes::FORBIDDEN,
@@ -178,7 +178,7 @@ impl Chainware for IpBlacklistChainware {
                 return None;
             }
             None => {
-                response.status = ExecutionStatus::Reject;
+                response.status = ChainStatus::Reject;
                 response.data = Some(
                     ErrorResponse::new(
                         error_codes::FORBIDDEN,
@@ -195,7 +195,7 @@ impl Chainware for IpBlacklistChainware {
         match self.is_ip_in_blacklist(ip_address, &ip_list) {
             Ok(true) => {
                 // IP在黑名单中，拒绝执行
-                response.status = ExecutionStatus::Reject;
+                response.status = ChainStatus::Reject;
                 response.data = Some(
                     ErrorResponse::new(
                         error_codes::FORBIDDEN,
@@ -211,7 +211,7 @@ impl Chainware for IpBlacklistChainware {
                 Some(input)
             }
             Err(err) => {
-                response.status = ExecutionStatus::Error;
+                response.status = ChainStatus::Error;
                 response.data = Some(
                     ErrorResponse::new(
                         error_codes::INTERNAL_ERROR,
