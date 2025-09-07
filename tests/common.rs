@@ -4,7 +4,7 @@
 
 use linkchain::chain::executor::ChainExecutor;
 use linkchain::chainware::config::ChainwareConfig;
-use linkchain::core::{ExecutionStatus, RequestContext};
+use linkchain::core::{ChainStatus, ChainRequest};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
@@ -14,7 +14,7 @@ pub type TestCase = (
     &'static str,                               // test_name  
     Value,                                      // input_data
     Vec<(&'static str, HashMap<String, Value>)>, // chainware_configs
-    ExecutionStatus,                            // expected_status
+    ChainStatus,                            // expected_status
     Option<&'static str>,                       // ip
     Option<Value>,                              // expected_result
 );
@@ -25,13 +25,12 @@ pub fn create_config(config_map: HashMap<String, Value>) -> ChainwareConfig {
 }
 
 /// 创建带IP的测试上下文
-pub fn create_context_with_ip(data: Value, ip: Option<&str>) -> RequestContext {
-    let mut context = RequestContext::new(data);
+pub fn create_context_with_ip(data: Value, ip: Option<&str>) -> ChainRequest {
+    let mut meta = HashMap::new();
     if let Some(ip_addr) = ip {
-        context
-            .meta
-            .insert("ip_address".to_string(), json!(ip_addr));
+        meta.insert("ip_address".to_string(), json!(ip_addr));
     }
+    let context = ChainRequest::new(data, meta);
     context
 }
 
@@ -41,7 +40,7 @@ pub fn run_test(
     test_name: &str,
     input_data: Value,
     chainware_configs: Vec<(&str, HashMap<String, Value>)>,
-    expected_status: ExecutionStatus,
+    expected_status: ChainStatus,
     ip: Option<&str>,
     expected_result: Option<Value>,
 ) -> bool {
@@ -54,23 +53,15 @@ pub fn run_test(
     // 构建执行器链
     let mut executor = ChainExecutor::new();
     for (name, config_map) in &chainware_configs {
-        let config = if config_map.is_empty() {
+        let _config = if config_map.is_empty() {
             None
         } else {
             Some(create_config(config_map.clone()))
         };
-        executor = executor.add_chainware(
-            name,
-            None::<
-                fn(
-                    &RequestContext,
-                    &mut linkchain::core::ResponseContext,
-                    Option<Value>,
-                    Option<&ChainwareConfig>,
-                ) -> Option<Value>,
-            >,
-            config,
-        );
+        executor = executor.add_chainwares(json!([{
+            "name": name,
+            "config": config_map
+        }])).unwrap();
         let config_desc = if config_map.is_empty() {
             "无配置".to_string()
         } else {

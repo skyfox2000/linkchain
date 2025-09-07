@@ -20,7 +20,7 @@ mod tests {
                     config.insert("template".to_string(), json!("用户 ${$.username} 执行了 ${$.action} 操作"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({"username": "张三", "action": "login"})),
             ),
@@ -33,7 +33,7 @@ mod tests {
                     config.insert("template".to_string(), json!("管理员 ${$.user.name} (${$.user.role}) 在 ${$.timestamp} 登录系统"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({"user": {"name": "李四", "role": "admin"}, "timestamp": "2024-01-01T10:00:00Z"})),
             ),
@@ -46,7 +46,7 @@ mod tests {
                     config.insert("template".to_string(), json!("客户 ${$.customer.name} 购买了 ${$.items.length} 件商品，总金额 ${$.total} 元"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({"customer": {"name": "王五"}, "items": [{"name": "商品1"}, {"name": "商品2"}], "total": 299.99})),
             ),
@@ -72,7 +72,7 @@ mod tests {
                     config.insert("overwrite".to_string(), json!(true));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({
                     "name": "张三",
@@ -97,7 +97,7 @@ mod tests {
                     config.insert("overwrite".to_string(), json!(false));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({
                     "id": 123,
@@ -122,7 +122,7 @@ mod tests {
                     config.insert("data_path".to_string(), json!("$params.extra_info"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({"name": "张三", "age": 25})), // 注意：实际实现需要params数据
             ),
@@ -155,7 +155,7 @@ mod tests {
                         config
                     }),
                 ],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({
                     "user": "admin",

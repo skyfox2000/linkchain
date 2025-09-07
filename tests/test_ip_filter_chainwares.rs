@@ -20,7 +20,7 @@ mod tests {
                     config.insert("ip_list".to_string(), json!("192.168.1.100,10.0.0.50"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 Some("192.168.1.200"),
                 Some(json!({"user": "test"})),
             ),
@@ -33,7 +33,7 @@ mod tests {
                     config.insert("ip_list".to_string(), json!("192.168.1.100,10.0.0.50"));
                     config
                 })],
-                ExecutionStatus::Reject,
+                ChainStatus::Reject,
                 Some("192.168.1.100"),
                 Some(json!( {"errno":403,"msg":"IP地址 192.168.1.100 在黑名单中"})),
             ),
@@ -46,7 +46,7 @@ mod tests {
                     config.insert("ip_list".to_string(), json!("192.168.0.0/16,10.0.0.0/8"));
                     config
                 })],
-                ExecutionStatus::Reject,
+                ChainStatus::Reject,
                 Some("192.168.100.50"),
                 Some(json!({"errno": 403, "msg": "IP地址 192.168.100.50 在黑名单中"})),
             ),
@@ -59,7 +59,7 @@ mod tests {
                     config.insert("ip_list".to_string(), json!("192.168.0.0/16,10.0.0.0/8"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 Some("8.8.8.8"),
                 Some(json!({"user": "test"})),
             ),
@@ -72,7 +72,7 @@ mod tests {
                     config.insert("ip_list".to_string(), json!("1.2.3.4,192.168.0.0/24,172.16.0.100"));
                     config
                 })],
-                ExecutionStatus::Reject,
+                ChainStatus::Reject,
                 Some("192.168.0.150"),
                 Some(json!({"errno": 403, "msg": "IP地址 192.168.0.150 在黑名单中"})),
             ),
@@ -93,7 +93,7 @@ mod tests {
                     config.insert("ip_list".to_string(), json!("127.0.0.1,192.168.1.100"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 Some("192.168.1.100"),
                 Some(json!({"user": "admin"})),
             ),
@@ -106,7 +106,7 @@ mod tests {
                     config.insert("ip_list".to_string(), json!("127.0.0.1,192.168.1.100"));
                     config
                 })],
-                ExecutionStatus::Reject,
+                ChainStatus::Reject,
                 Some("192.168.1.200"),
                 Some(json!({"errno": 403, "msg": "IP地址 192.168.1.200 不在白名单中"})),
             ),
@@ -119,7 +119,7 @@ mod tests {
                     config.insert("ip_list".to_string(), json!("192.168.0.0/16,10.0.0.0/8"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 Some("192.168.50.100"),
                 Some(json!({"user": "internal"})),
             ),
@@ -132,7 +132,7 @@ mod tests {
                     config.insert("ip_list".to_string(), json!("127.0.0.1,::1"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 Some("127.0.0.1"),
                 Some(json!({"user": "localhost"})),
             ),
@@ -145,7 +145,7 @@ mod tests {
                     config.insert("ip_list".to_string(), json!("203.0.113.0/24,198.51.100.0/24"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 Some("203.0.113.100"),
                 Some(json!({"user": "employee"})),
             ),
@@ -173,7 +173,7 @@ mod tests {
                         config
                     }),
                 ],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 Some("192.168.1.200"),
                 Some(json!({"user": "admin", "action": "login"})),
             ),
@@ -193,7 +193,7 @@ mod tests {
                         config
                     }),
                 ],
-                ExecutionStatus::Reject,
+                ChainStatus::Reject,
                 Some("192.168.1.100"),
                 Some(json!({"errno": 403, "msg": "IP地址 192.168.1.100 在黑名单中"})),
             ),
@@ -213,7 +213,7 @@ mod tests {
                         config
                     }),
                 ],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 Some("192.168.1.50"),
                 Some(json!({"user": "admin", "role": "administrator"})),
             ),
@@ -234,7 +234,7 @@ mod tests {
                     config.insert("ip_list".to_string(), json!("::1,127.0.0.1"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 Some("::1"),
                 Some(json!({"user": "test"})),
             ),
@@ -247,7 +247,7 @@ mod tests {
                     config.insert("ip_list".to_string(), json!("192.168.1.100"));
                     config
                 })],
-                ExecutionStatus::Error,
+                ChainStatus::Error,
                 Some("invalid.ip.address"),
                 Some(json!({"errno": 500, "msg": "IP黑名单检查失败: 无效的IP地址: invalid.ip.address"})),
             ),
@@ -260,7 +260,7 @@ mod tests {
                     config.insert("ip_list".to_string(), json!(""));
                     config
                 })],
-                ExecutionStatus::Reject,
+                ChainStatus::Reject,
                 Some("192.168.1.100"),
                 Some(json!({"errno": 403, "msg": "IP地址 192.168.1.100 不在白名单中"})),
             ),

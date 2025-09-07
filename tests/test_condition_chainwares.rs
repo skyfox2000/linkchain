@@ -20,7 +20,7 @@ mod tests {
                     config.insert("expression".to_string(), json!("$.age == 25"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({"age": 25})),
             ),
@@ -33,7 +33,7 @@ mod tests {
                     config.insert("expression".to_string(), json!("$.role == \"admin\""));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({"role": "admin"})),
             ),
@@ -46,7 +46,7 @@ mod tests {
                     config.insert("expression".to_string(), json!("$.status == \"active\""));
                     config
                 })],
-                ExecutionStatus::Reject,
+                ChainStatus::Reject,
                 None,
                 Some(json!({"errno": 401, "msg": "条件检查未通过: $.status == \"active\""})),
             ),
@@ -59,7 +59,7 @@ mod tests {
                     config.insert("expression".to_string(), json!("$.score >= 80"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({"score": 85})),
             ),
@@ -75,7 +75,7 @@ mod tests {
                     );
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({"age": 25, "verified": true})),
             ),
@@ -99,7 +99,7 @@ mod tests {
                     );
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({"email": "admin@example.com"})),
             ),
@@ -115,7 +115,7 @@ mod tests {
                     );
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({"email": "user@company.com"})),
             ),
@@ -128,7 +128,7 @@ mod tests {
                     config.insert("expression".to_string(), json!("Chain.isString($.name)"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({"name": "张三"})),
             ),
@@ -141,7 +141,7 @@ mod tests {
                     config.insert("expression".to_string(), json!("Chain.isNumber($.age)"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({"age": 25})),
             ),
@@ -154,7 +154,7 @@ mod tests {
                     config.insert("expression".to_string(), json!("$.username.length >= 6"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({"username": "testuser"})),
             ),
@@ -175,7 +175,7 @@ mod tests {
                     config.insert("pattern".to_string(), json!(r"^\d+$"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!("12345")),
             ),
@@ -191,7 +191,7 @@ mod tests {
                     );
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!("test@example.com")),
             ),
@@ -204,7 +204,7 @@ mod tests {
                     config.insert("pattern".to_string(), json!(r"^1[3-9]\d{9}$"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!("13812345678")),
             ),
@@ -217,7 +217,7 @@ mod tests {
                     config.insert("pattern".to_string(), json!(r"^\d+$"));
                     config
                 })],
-                ExecutionStatus::Reject,
+                ChainStatus::Reject,
                 None,
                 Some(json!({"errno": 401, "msg": "数据不符合正则规则: ^\\d+$"})),
             ),
@@ -230,13 +230,86 @@ mod tests {
                     config.insert("pattern".to_string(), json!(r"^[a-zA-Z0-9_]{3,20}$"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!("test_user123")),
             ),
         ];
 
         run_test_cases(test_cases, "正则条件挂件测试", 0.8);
+    }
+
+    #[test]
+    fn test_condition_strict_equality() {
+        let test_cases = vec![
+            (
+                1,
+                "严格相等比较 - 字符串",
+                json!({"value": "123"}),
+                vec![("condition", {
+                    let mut config = HashMap::new();
+                    config.insert("expression".to_string(), json!("$.value === \"123\""));
+                    config
+                })],
+                ChainStatus::Completed,
+                None,
+                Some(json!({"value": "123"})),
+            ),
+            (
+                2,
+                "严格相等比较 - 数字",
+                json!({"value": 123}),
+                vec![("condition", {
+                    let mut config = HashMap::new();
+                    config.insert("expression".to_string(), json!("$.value === 123"));
+                    config
+                })],
+                ChainStatus::Completed,
+                None,
+                Some(json!({"value": 123})),
+            ),
+            (
+                3,
+                "严格相等比较 - 类型不匹配",
+                json!({"value": "123"}),
+                vec![("condition", {
+                    let mut config = HashMap::new();
+                    config.insert("expression".to_string(), json!("$.value === 123"));
+                    config
+                })],
+                ChainStatus::Reject,
+                None,
+                Some(json!({ "errno": 401, "msg": "条件检查未通过: $.value === 123" })),
+            ),
+            (
+                4,
+                "undefined 比较 - 字段不存在",
+                json!({}),
+                vec![("condition", {
+                    let mut config = HashMap::new();
+                    config.insert("expression".to_string(), json!("$.nonexistent === undefined"));
+                    config
+                })],
+                ChainStatus::Completed,
+                None,
+                Some(json!({})),
+            ),
+            (
+                5,
+                "undefined 比较 - 字段存在但不匹配",
+                json!({"value": "test"}),
+                vec![("condition", {
+                    let mut config = HashMap::new();
+                    config.insert("expression".to_string(), json!("$.value === undefined"));
+                    config
+                })],
+                ChainStatus::Reject,
+                None,
+                Some(json!({ "errno": 401, "msg": "条件检查未通过: $.value === undefined" })),
+            ),
+        ];
+
+        run_test_cases(test_cases, "严格相等和 undefined 比较测试", 0.5);
     }
 
     #[test]
@@ -266,7 +339,7 @@ mod tests {
                         config
                     }),
                 ],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({"username": "admin", "age": 25, "email": "admin@test.com"})),
             ),
@@ -286,7 +359,7 @@ mod tests {
                         config
                     }),
                 ],
-                ExecutionStatus::Reject,
+                ChainStatus::Reject,
                 None,
                 Some(json!({"errno": 401, "msg": "条件检查未通过: $.age >= 18"})),
             ),

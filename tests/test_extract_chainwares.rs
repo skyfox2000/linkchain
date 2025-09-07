@@ -24,7 +24,7 @@ mod tests {
                     }));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({
                     "user_name": "张三",
@@ -45,7 +45,7 @@ mod tests {
                     }));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({
                     "username": "李四",
@@ -66,7 +66,7 @@ mod tests {
                     }));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({
                     "username": "王五",
@@ -87,7 +87,7 @@ mod tests {
                     }));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({
                     "first_item": "商品1",
@@ -107,7 +107,7 @@ mod tests {
                     }));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({
                     "full_name": "张三",
@@ -127,7 +127,7 @@ mod tests {
                 "从文本中提取JSON对象",
                 json!("用户信息：{\"name\":\"张三\",\"age\":25} 处理完成"),
                 vec![("extract_json", HashMap::new())],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({"name":"张三","age":25})),
             ),
@@ -136,7 +136,7 @@ mod tests {
                 "提取纯JSON字符串",
                 json!("{\"status\":\"success\",\"data\":[1,2,3]}"),
                 vec![("extract_json", HashMap::new())],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({"status":"success","data":[1,2,3]})),
             ),
@@ -145,7 +145,7 @@ mod tests {
                 "提取复杂JSON结构",
                 json!("响应数据: {\"user\":{\"id\":123,\"profile\":{\"name\":\"李四\",\"email\":\"li@test.com\"}},\"status\":\"ok\"}"),
                 vec![("extract_json", HashMap::new())],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({"user":{"id":123,"profile":{"name":"李四","email":"li@test.com"}},"status":"ok"})),
             ),
@@ -154,7 +154,7 @@ mod tests {
                 "提取数组JSON",
                 json!("商品列表: [{\"id\":1,\"name\":\"商品A\"},{\"id\":2,\"name\":\"商品B\"}] 共2项"),
                 vec![("extract_json", HashMap::new())],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!([{"id":1,"name":"商品A"},{"id":2,"name":"商品B"}])),
             ),
@@ -163,7 +163,7 @@ mod tests {
                 "无JSON内容时的错误处理",
                 json!("这里没有JSON数据"),
                 vec![("extract_json", HashMap::new())],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!(Value::Null)),
             ),
@@ -180,7 +180,7 @@ mod tests {
                 "提取Markdown SQL代码块",
                 json!("查询语句如下：\n```sql\nSELECT * FROM users WHERE age > 18;\n```\n执行结果..."),
                 vec![("extract_sql", HashMap::new())],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!("SELECT * FROM users WHERE age > 18;")),
             ),
@@ -189,7 +189,7 @@ mod tests {
                 "提取直接SQL语句",
                 json!("INSERT INTO users (name, age) VALUES ('张三', 25);"),
                 vec![("extract_sql", HashMap::new())],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!("INSERT INTO users (name, age) VALUES ('张三', 25);")),
             ),
@@ -198,7 +198,7 @@ mod tests {
                 "提取UPDATE语句",
                 json!("需要执行 UPDATE products SET price = price * 0.9 WHERE category = 'electronics'; 来更新价格"),
                 vec![("extract_sql", HashMap::new())],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!("UPDATE products SET price = price * 0.9 WHERE category = 'electronics';")),
             ),
@@ -207,7 +207,7 @@ mod tests {
                 "提取复杂SQL查询",
                 json!("```sql\nSELECT u.name, p.title, COUNT(*) as count\nFROM users u\nJOIN posts p ON u.id = p.user_id\nWHERE u.active = 1\nGROUP BY u.id, p.id\nORDER BY count DESC;\n```"),
                 vec![("extract_sql", HashMap::new())],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!("SELECT u.name, p.title, COUNT(*) as count\nFROM users u\nJOIN posts p ON u.id = p.user_id\nWHERE u.active = 1\nGROUP BY u.id, p.id\nORDER BY count DESC;")),
             ),
@@ -216,7 +216,7 @@ mod tests {
                 "无SQL内容时的错误处理",
                 json!("这里没有SQL语句"),
                 vec![("extract_sql", HashMap::new())],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!(Value::Null)),
             ),
@@ -237,7 +237,7 @@ mod tests {
                     config.insert("pattern".to_string(), json!("$.user.name"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!("张三")),
             ),
@@ -250,7 +250,7 @@ mod tests {
                     config.insert("pattern".to_string(), json!("$.items[1]"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!("banana")),
             ),
@@ -263,7 +263,7 @@ mod tests {
                     config.insert("pattern".to_string(), json!("$.data.users[0].profile.email"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!("test@example.com")),
             ),
@@ -276,7 +276,7 @@ mod tests {
                     config.insert("pattern".to_string(), json!("$.products.length"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!(3)),
             ),
@@ -289,7 +289,7 @@ mod tests {
                     config.insert("pattern".to_string(), json!("$.user.nonexistent"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!(Value::Null)),
             ),
@@ -310,7 +310,7 @@ mod tests {
                     config.insert("pattern".to_string(), json!(r"\d+"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!("12345")),
             ),
@@ -323,7 +323,7 @@ mod tests {
                     config.insert("pattern".to_string(), json!(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!("admin@example.com")),
             ),
@@ -336,7 +336,7 @@ mod tests {
                     config.insert("pattern".to_string(), json!(r"1[3-9]\d{9}"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!("13812345678")),
             ),
@@ -349,7 +349,7 @@ mod tests {
                     config.insert("pattern".to_string(), json!(r"\d{4}-\d{2}-\d{2}"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!("2024-01-15")),
             ),
@@ -362,7 +362,7 @@ mod tests {
                     config.insert("pattern".to_string(), json!(r"\d+"));
                     config
                 })],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!(Value::Null)),
             ),
@@ -394,7 +394,7 @@ mod tests {
                         config
                     }),
                 ],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!({
                     "username": "张三",
@@ -418,7 +418,7 @@ mod tests {
                         config
                     }),
                 ],
-                ExecutionStatus::Completed,
+                ChainStatus::Completed,
                 None,
                 Some(json!("13812345678")),
             ),

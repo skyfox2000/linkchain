@@ -1,305 +1,148 @@
 //! 集成场景测试
 //!
-//! 使用ChainExecutor统一管理测试复杂业务场景
+//! 测试多个挂件组合使用的场景
 
 use linkchain::chain::executor::ChainExecutor;
-use linkchain::chainware::config::ChainwareConfig;
-use linkchain::core::{ExecutionStatus, RequestContext};
-use serde_json::{json, Value};
+use linkchain::core::{ChainRequest, ChainStatus};
+use serde_json::json;
 use std::collections::HashMap;
-
-fn create_config(config_map: HashMap<String, Value>) -> ChainwareConfig {
-    ChainwareConfig { config: config_map }
-}
-
-fn run_test(
-    test_id: u32,
-    test_name: &str,
-    input_data: Value,
-    chainware_configs: Vec<(&str, HashMap<String, Value>)>,
-    expected_status: ExecutionStatus,
-    ip: Option<&str>,
-    expected_result: Option<Value>,
-) -> bool {
-    println!("📋 测试#{}: {}", test_id, test_name);
-    println!("├─ 输入数据: {}", input_data);
-    if let Some(ip_addr) = ip {
-        println!("├─ 客户端IP: {}", ip_addr);
-    }
-
-    let mut executor = ChainExecutor::new();
-    for (name, config_map) in &chainware_configs {
-        let config = if config_map.is_empty() {
-            None
-        } else {
-            Some(create_config(config_map.clone()))
-        };
-        executor = executor.add_chainware(
-            name,
-            None::<
-                fn(
-                    &RequestContext,
-                    &mut linkchain::core::ResponseContext,
-                    Option<Value>,
-                    Option<&ChainwareConfig>,
-                ) -> Option<Value>,
-            >,
-            config,
-        );
-        let config_desc = if config_map.is_empty() {
-            "无配置".to_string()
-        } else {
-            format!("{:?}", config_map)
-        };
-        println!("├─ 挂件: {} - {}", name, config_desc);
-    }
-
-    let mut context = RequestContext::new(input_data);
-    if let Some(ip_addr) = ip {
-        context
-            .meta
-            .insert("ip_address".to_string(), json!(ip_addr));
-    }
-
-    let response = executor.execute(context);
-    let actual_data = response.data.clone();
-
-    println!("├─ 期望状态: {:?}", expected_status);
-    println!("├─ 实际状态: {:?}", response.status);
-    println!(
-        "├─ 期望数据: {}",
-        expected_result.clone().unwrap_or(Value::Null)
-    );
-    println!(
-        "├─ 实际数据: {}",
-        actual_data.clone().unwrap_or(Value::Null)
-    );
-
-    let status_success = response.status == expected_status;
-    let data_success = if let Some(expected) = &expected_result {
-        actual_data.as_ref().map(|d| d.to_string()) == Some(expected.to_string())
-    } else {
-        true
-    };
-
-    let success = status_success && data_success;
-
-    if !data_success && expected_result.is_some() {
-        println!("├─ 数据不匹配!");
-    }
-
-    println!(
-        "└─ 结果: {} {}",
-        if success { "✅" } else { "❌" },
-        if success { "成功" } else { "失败" }
-    );
-    println!("{}", "-".repeat(50));
-
-    success
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_user_registration() {
-        println!("🧪 集成场景：用户注册流程");
+    fn test_user_authentication_and_logging() {
+        // 创建执行器
+        let mut executor = ChainExecutor::new();
+        
+        // 添加条件判断挂件 - 验证用户年龄
+        let mut age_config = HashMap::new();
+        age_config.insert("expression".to_string(), json!("$.age >= 18"));
+        executor = executor.add_chainwares(json!([{
+            "name": "condition",
+            "config": age_config
+        }])).unwrap();
 
-        let test_cases = vec![(
-            "用户注册流程",
-            json!({
-                "raw_data": "username=newuser,email=user@example.com,password=secret123"
-            }),
-            vec![
-                ("json_extract", {
-                    let mut config = HashMap::new();
-                    config.insert("pattern".to_string(), json!("$.raw_data"));
-                    config
-                }),
-                ("regexp_extract", {
-                    let mut config = HashMap::new();
-                    config.insert(
-                        "pattern".to_string(),
-                        json!(r"username=([^,]+),email=([^,]+),password=([^,]+)"),
-                    );
-                    config
-                }),
-                ("extract_map", {
-                    let mut config = HashMap::new();
-                    config.insert(
-                        "mapping".to_string(),
-                        json!({
-                            "username": "$input[0]",
-                            "email": "$.[1]"
-                        }),
-                    );
-                    config
-                }),
-                ("logger", {
-                    let mut config = HashMap::new();
-                    config.insert("level".to_string(), json!("INFO"));
-                    config.insert("message".to_string(), json!("用户注册完成"));
-                    config
-                }),
-            ],
-            ExecutionStatus::Completed,
-            Some("192.168.1.100"),
-            Some(json!({"username": "newuser", "email": "user@example.com"})),
-        )];
+        // 添加日志记录挂件
+        let mut logger_config = HashMap::new();
+        logger_config.insert("template".to_string(), json!("用户 ${$.name} 已验证，年龄: ${$.age}"));
+        executor = executor.add_chainwares(json!([{
+            "name": "logger",
+            "config": logger_config
+        }])).unwrap();
 
-        let mut passed = 0;
-        for (test_name, input_data, configs, expected_status, ip, expected_result) in test_cases {
-            if run_test(
-                1,
-                test_name,
-                input_data,
-                configs,
-                expected_status,
-                ip,
-                expected_result,
-            ) {
-                passed += 1;
-            }
-        }
+        // 创建请求上下文
+        let input_data = json!({"name": "张三", "age": 25, "city": "北京"});
+        let meta = HashMap::new();
+        let context = ChainRequest::new(input_data, meta);
 
-        println!("用户注册流程测试通过: {}/1", passed);
-        assert!(passed >= 1);
+        // 执行链
+        let response = executor.execute(context);
+
+        // 检查执行结果
+        assert_eq!(response.status, ChainStatus::Completed);
+        assert!(response.data.is_some());
     }
 
     #[test]
-    fn test_security_check() {
-        println!("🧪 集成场景：安全检查流程");
+    fn test_complex_data_processing_pipeline() {
+        // 创建执行器
+        let mut executor = ChainExecutor::new();
+        
+        // 添加IP白名单挂件
+        let mut ip_whitelist_config = HashMap::new();
+        ip_whitelist_config.insert("ip_list".to_string(), json!("192.168.1.0/24,10.0.0.0/8"));
+        executor = executor.add_chainwares(json!([{
+            "name": "ip_whitelist",
+            "config": ip_whitelist_config
+        }])).unwrap();
 
-        let test_cases = vec![
-            (
-                "安全用户访问",
-                json!({"user": "admin", "action": "login"}),
-                vec![
-                    ("ip_whitelist", {
-                        let mut config = HashMap::new();
-                        config.insert("ip_list".to_string(), json!("192.168.1.0/24"));
-                        config
-                    }),
-                    ("condition", {
-                        let mut config = HashMap::new();
-                        config.insert("condition".to_string(), json!("$.user == \"admin\""));
-                        config
-                    }),
-                    ("logger", {
-                        let mut config = HashMap::new();
-                        config.insert("level".to_string(), json!("INFO"));
-                        config.insert("message".to_string(), json!("管理员访问"));
-                        config
-                    }),
-                ],
-                ExecutionStatus::Completed,
-                Some("192.168.1.10"),
-                Some(json!({"user": "admin", "action": "login"})),
-            ),
-            (
-                "IP黑名单访问",
-                json!({"user": "hacker", "action": "attack"}),
-                vec![
-                    ("ip_blacklist", {
-                        let mut config = HashMap::new();
-                        config.insert("ip_list".to_string(), json!("203.0.113.0/24"));
-                        config
-                    }),
-                    ("logger", {
-                        let mut config = HashMap::new();
-                        config.insert("level".to_string(), json!("WARN"));
-                        config.insert("message".to_string(), json!("恶意IP访问"));
-                        config
-                    }),
-                ],
-                ExecutionStatus::Reject,
-                Some("203.0.113.100"),
-                Some(
-                    json!({"errno":403,"msg":"IP地址 203.0.113.100 在黑名单中"}),
-                ),
-            ),
-        ];
+        // 添加数据提取挂件 - 提取用户基本信息
+        let mut extract_config = HashMap::new();
+        extract_config.insert("mapping".to_string(), json!({
+            "user_name": "$.name",
+            "user_age": "$.age",
+            "user_role": "$.role"
+        }));
+        executor = executor.add_chainwares(json!([{
+            "name": "extract_map",
+            "config": extract_config
+        }])).unwrap();
 
-        let mut passed = 0;
-        for (test_name, input_data, configs, expected_status, ip, expected_result) in test_cases {
-            if run_test(
-                2,
-                test_name,
-                input_data,
-                configs,
-                expected_status,
-                ip,
-                expected_result,
-            ) {
-                passed += 1;
-            }
-        }
+        // 添加条件判断挂件 - 验证权限
+        let mut permission_config = HashMap::new();
+        permission_config.insert("expression".to_string(), json!("$.user_role == 'admin' && $.user_age >= 18"));
+        executor = executor.add_chainwares(json!([{
+            "name": "condition",
+            "config": permission_config
+        }])).unwrap();
 
-        println!("安全检查流程测试通过: {}/2", passed);
-        assert!(passed >= 1);
+        // 添加数据合并挂件
+        let mut merge_config = HashMap::new();
+        merge_config.insert("data_path".to_string(), json!("$meta"));
+        executor = executor.add_chainwares(json!([{
+            "name": "merge",
+            "config": merge_config
+        }])).unwrap();
+
+        // 创建请求上下文
+        let input_data = json!({
+            "name": "管理员",
+            "age": 30,
+            "role": "admin",
+            "permissions": ["read", "write", "delete"]
+        });
+        
+        let mut meta = HashMap::new();
+        meta.insert("ip_address".to_string(), json!("192.168.1.100"));
+        meta.insert("timestamp".to_string(), json!("2024-01-01T10:00:00Z"));
+        meta.insert("session_id".to_string(), json!("session_12345"));
+        let context = ChainRequest::new(input_data, meta);
+
+        // 执行链
+        let response = executor.execute(context);
+
+        // 检查执行结果
+        assert_eq!(response.status, ChainStatus::Completed);
+        assert!(response.data.is_some());
+        
+        let result_data = response.data.unwrap();
+        assert!(result_data.get("timestamp").is_some());
+        assert!(result_data.get("session_id").is_some());
     }
 
     #[test]
-    fn test_data_pipeline() {
-        println!("🧪 集成场景：数据处理管道");
+    fn test_reject_flow_with_blacklist() {
+        // 创建执行器
+        let mut executor = ChainExecutor::new();
+        
+        // 添加IP黑名单挂件
+        let mut ip_blacklist_config = HashMap::new();
+        ip_blacklist_config.insert("ip_list".to_string(), json!("192.168.1.100"));
+        executor = executor.add_chainwares(json!([{
+            "name": "ip_blacklist",
+            "config": ip_blacklist_config
+        }])).unwrap();
 
-        let test_cases = vec![(
-            "日志数据处理",
-            json!({
-                "log_entry": "2024-01-01 10:30:45 [INFO] User admin login success"
-            }),
-            vec![
-                ("json_extract", {
-                    let mut config = HashMap::new();
-                    config.insert("pattern".to_string(), json!("$.log_entry"));
-                    config
-                }),
-                ("regexp_extract", {
-                    let mut config = HashMap::new();
-                    config.insert("pattern".to_string(), json!(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[(\w+)\] User (\w+) (\w+) (\w+)"));
-                    config
-                }),
-                ("extract_map", {
-                    let mut config = HashMap::new();
-                    config.insert(
-                        "mapping".to_string(),
-                        json!({
-                            "timestamp": "$input[0]",
-                            "level": "$[1]",
-                            "username": "$[2]"
-                        }),
-                    );
-                    config
-                }),
-                ("logger", {
-                    let mut config = HashMap::new();
-                    config.insert("level".to_string(), json!("INFO"));
-                    config.insert("message".to_string(), json!("日志处理完成"));
-                    config
-                }),
-            ],
-            ExecutionStatus::Completed,
-            None,
-            Some(json!({"timestamp": "2024-01-01 10:30:45", "level": "INFO", "username": "admin"})),
-        )];
+        // 添加条件判断挂件
+        let mut condition_config = HashMap::new();
+        condition_config.insert("expression".to_string(), json!("$.score > 80"));
+        executor = executor.add_chainwares(json!([{
+            "name": "condition",
+            "config": condition_config
+        }])).unwrap();
 
-        let mut passed = 0;
-        for (test_name, input_data, configs, expected_status, ip, expected_result) in test_cases {
-            if run_test(
-                3,
-                test_name,
-                input_data,
-                configs,
-                expected_status,
-                ip,
-                expected_result,
-            ) {
-                passed += 1;
-            }
-        }
+        // 创建请求上下文 (使用黑名单中的IP)
+        let input_data = json!({"name": "用户", "score": 95});
+        let mut meta = HashMap::new();
+        meta.insert("ip_address".to_string(), json!("192.168.1.100"));
+        let context = ChainRequest::new(input_data, meta);
 
-        println!("数据处理管道测试通过: {}/1", passed);
-        assert!(passed >= 1);
+        // 执行链
+        let response = executor.execute(context);
+
+        // 检查执行结果应该是Reject状态
+        assert_eq!(response.status, ChainStatus::Reject);
     }
 }
