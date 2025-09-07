@@ -30,7 +30,10 @@ impl LoggerChainware {
     /// 记录日志信息
     fn log_info(&self, context: &Value, template: &str) -> Result<(), String> {
         let message = JsonPathTemplate::get_value(context, template)?;
-        println!("[Logger] {}", message);
+        if message.is_none() {
+            return Ok(());
+        }
+        println!("[Logger] {}", message.unwrap());
         Ok(())
     }
 }

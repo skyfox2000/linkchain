@@ -6,6 +6,7 @@ use crate::chainware::config::ChainwareConfig;
 use crate::chainware::core::Chainware;
 use crate::core::{ChainStatus, ChainRequest, ChainResponse};
 use crate::types::{error_codes, ErrorResponse};
+use crate::utils::ip_utils;
 use serde_json::Value;
 use std::net::IpAddr;
 
@@ -127,33 +128,14 @@ impl Chainware for IpWhitelistChainware {
         let input = data.unwrap_or_default();
 
         // 从配置中获取IP白名单
-        let ip_list: Vec<String> = match config.and_then(|cfg| cfg.config.get("ip_list")) {
-            Some(Value::String(ip_str)) => {
-                // 支持逗号分割的字符串格式
-                ip_str
-                    .split(',')
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
-                    .collect::<Vec<String>>()
-            }
-            Some(_) => {
+        let ip_list = match ip_utils::extract_ip_list(config.and_then(|cfg| cfg.config.get("ip_list"))) {
+            Ok(list) => list,
+            Err(err) => {
                 response.status = ChainStatus::Error;
                 response.data = Some(
                     ErrorResponse::new(
                         error_codes::CONFIG_ERROR,
-                        "ip_list配置只能是字符串类型".to_string(),
-                        None,
-                    )
-                    .to_json(),
-                );
-                return Some(input); // 数据透传
-            }
-            None => {
-                response.status = ChainStatus::Error;
-                response.data = Some(
-                    ErrorResponse::new(
-                        error_codes::CONFIG_ERROR,
-                        "缺少ip_list配置".to_string(),
+                        err,
                         None,
                     )
                     .to_json(),
@@ -162,15 +144,21 @@ impl Chainware for IpWhitelistChainware {
             }
         };
 
+        // 从配置中获取IP地址字段名，默认为"ip_address"
+        let ip_key = config
+            .and_then(|cfg| cfg.config.get("ip_key"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("ip_address");
+
         // 从meta中获取IP地址
-        let ip_address = match request.meta.get("ip_address") {
+        let ip_address = match request.meta.get(ip_key) {
             Some(Value::String(ip)) => ip,
             Some(_) => {
                 response.status = ChainStatus::Reject;
                 response.data = Some(
                     ErrorResponse::new(
                         error_codes::FORBIDDEN,
-                        "meta中的ip_address必须是字符串类型".to_string(),
+                        format!("meta中的{}必须是字符串类型", ip_key),
                         None,
                     )
                     .to_json(),
@@ -182,7 +170,7 @@ impl Chainware for IpWhitelistChainware {
                 response.data = Some(
                     ErrorResponse::new(
                         error_codes::FORBIDDEN,
-                        "meta中缺少ip_address".to_string(),
+                        format!("meta中缺少{}", ip_key),
                         None,
                     )
                     .to_json(),

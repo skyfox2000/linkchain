@@ -2,8 +2,8 @@
 //!
 //! 基于JSONPath从对象或数组中提取指定内容
 
-use crate::chainware::core::Chainware;
 use crate::chainware::config::ChainwareConfig;
+use crate::chainware::core::Chainware;
 use crate::core::{ChainRequest, ChainResponse};
 use crate::types::{error_codes, ErrorResponse};
 use crate::utils::json_path::JsonPathTemplate;
@@ -28,15 +28,24 @@ impl JsonExtractChainware {
     }
 
     /// 提取操作：基于JSONPath从对象或数组中提取指定内容
-    fn process_extract(&self, input: &Value, pattern: Option<&Value>, context: &Value) -> Result<Value, String> {
+    fn process_extract(
+        &self,
+        input: &Value,
+        pattern: Option<&Value>,
+        context: &Value,
+    ) -> Result<Option<Value>, String> {
         // 如果pattern为空，返回原data
         let pattern_str = match pattern {
             Some(Value::String(path)) => path,
-            _ => return Ok(input.clone()),
+            _ => return Ok(Some(input.clone())),
         };
 
         // 使用统一的JsonPathTemplate工具获取值
-        JsonPathTemplate::get_value(context, pattern_str)
+        match JsonPathTemplate::get_value(context, pattern_str) {
+            Ok(Some(value)) => Ok(Some(value)),
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 }
 
@@ -61,7 +70,7 @@ impl Chainware for JsonExtractChainware {
         let pattern = config.and_then(|cfg| cfg.config.get("pattern"));
 
         match self.process_extract(&input, pattern, &context) {
-            Ok(result) => Some(result),
+            Ok(result) => result,
             Err(err) => {
                 response.data = Some(
                     ErrorResponse::new(

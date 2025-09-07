@@ -89,18 +89,19 @@ impl ExtractMapChainware {
     fn extract_value_from_template(&self, template: &str, context: &Value) -> Result<Value, String> {
         let template = template.trim();
 
-        // 情况1：以$开头的JSONPath路径
-        if template.starts_with('$') {
-            return JsonPathTemplate::get_value(context, template);
+        // 情况1：以$开头的JSONPath路径 或 包含${}变量的模板字符串
+        if template.starts_with('$') || template.contains("${") {
+            match JsonPathTemplate::get_value(context, template) {
+                Ok(Some(value)) => Ok(value),
+                Ok(None) => Ok(Value::String(template.to_string())),
+                Err(e) => Err(e),
+            }
         }
 
-        // 情况2：包含${}变量的模板字符串
-        if template.contains("${") {
-            return JsonPathTemplate::get_value(context, template);
+        // 情况2：字面量字符串（不包含任何变量）
+        else {
+            Ok(Value::String(template.to_string()))
         }
-
-        // 情况3：字面量字符串（不包含任何变量）
-        Ok(Value::String(template.to_string()))
     }
 
     /// 验证配置是否有效

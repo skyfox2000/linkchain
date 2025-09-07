@@ -201,7 +201,7 @@ impl ChainExecutor {
 
     /// 执行链
     pub fn execute(&self, request: ChainRequest) -> ChainResponse {
-        let mut response = ChainResponse::new(request.start_time.clone());
+        let mut response = ChainResponse::new(request.start_time);
         // 初始化数据为请求数据
         let mut params: serde_json::Value = request.params.clone();
         response.set_data(params.clone());

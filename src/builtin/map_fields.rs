@@ -68,10 +68,11 @@ impl MapFieldsChainware {
                 for (new_field, source_path) in mapping_obj {
                     if let Some(path_str) = source_path.as_str() {
                         match JsonPathTemplate::get_value(context, path_str) {
-                            Ok(value) => {
+                            Ok(Some(value)) => {
                                 // 添加或覆盖字段
                                 result.insert(new_field.to_string(), value);
                             }
+                            Ok(None) => {}
                             Err(err) => {
                                 // 映射失败时返回错误
                                 return Err(format!("字段映射失败，路径 '{}': {}", path_str, err));
@@ -105,9 +106,10 @@ impl MapFieldsChainware {
                                 });
                                 
                                 match JsonPathTemplate::get_value(&item_context, path_str) {
-                                    Ok(value) => {
+                                    Ok(Some(value)) => {
                                         result_item.insert(new_field.to_string(), value);
                                     }
+                                    Ok(None) => {}
                                     Err(err) => {
                                         return Err(format!("数组元素字段映射失败，路径 '{}': {}", path_str, err));
                                     }
@@ -139,10 +141,11 @@ impl MapFieldsChainware {
         for (new_field, source_path) in mapping_obj {
             if let Some(path_str) = source_path.as_str() {
                 match JsonPathTemplate::get_value(context, path_str) {
-                    Ok(value) => {
+                    Ok(Some(value)) => {
                         // 只添加成功映射的字段
                         result.insert(new_field.to_string(), value);
                     }
+                    Ok(None) => {}
                     Err(err) => {
                         // 严格模式下任何映射失败都返回错误
                         return Err(format!("字段映射失败，路径 '{}': {}", path_str, err));

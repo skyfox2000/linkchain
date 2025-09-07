@@ -41,7 +41,8 @@ impl MergeChainware {
     ) -> Result<Value, String> {
         // 使用JsonPathTemplate从context获取合并数据
         let merge_data = match JsonPathTemplate::get_value(context, data_path) {
-            Ok(data) => data,
+            Ok(Some(data)) => data,
+            Ok(None) => return Ok(input.clone()),
             Err(err) => {
                 return Err(format!("无法从路径 '{}' 获取数据: {}", data_path, err));
             }

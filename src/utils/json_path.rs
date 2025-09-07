@@ -36,7 +36,8 @@ impl JsonPathTemplate {
     ///   - 如果以`$data`开头，则当作input获取数据
     ///   - 如果以`$input`开头，则当作input获取数据
     ///   - 如果模板还有其它字符内容，则转换成字符串替换对应位置
-    pub fn get_value(context: &Value, template: &str) -> Result<Value, String> {
+    ///   - 如果查询失败，则返回`None`
+    pub fn get_value(context: &Value, template: &str) -> Result<Option<Value>, String> {
         let template = template.trim();
 
         let (path, data) = {
@@ -117,21 +118,24 @@ impl JsonPathTemplate {
 
         if path.contains("${") {
             // 情况9：包含变量的模板字符串
-            return Self::resolve_template(context, &path);
+            let result = Self::resolve_template(context, &path);
+            if result.is_err() {
+                return Err(result.err().unwrap());
+            }
+            return Ok(Some(result.unwrap()));
         }
 
         Self::resolve_jsonpath(data, &path.to_string())
     }
 
     /// 解析JSONPath路径
-    fn resolve_jsonpath(context: &Value, path: &str) -> Result<Value, String> {
+    fn resolve_jsonpath(context: &Value, path: &str) -> Result<Option<Value>, String> {
         // 使用jsonpath_rust库查询
         // println!("resolve_jsonpath - path: {}, context: {:?}", path, context);
 
         // 检查是否以.length结尾
-        if path.ends_with(".length") {
-            // 去掉.length后缀，获取原始路径
-            let base_path = &path[..path.len() - 7]; // 去掉".length"
+        if let Some(base_path) = path.strip_suffix(".length") {
+            // 去掉".length"后缀，获取原始路径
 
             match context.query(base_path) {
                 Ok(results) => {
@@ -142,11 +146,11 @@ impl JsonPathTemplate {
                             Value::String(s) => s.len() as i64,
                             Value::Array(a) => a.len() as i64,
                             Value::Object(o) => o.len() as i64,
-                            _ => return Ok(Value::Null),
+                            _ => return Ok(None),
                         };
-                        Ok(Value::Number(length.into()))
+                        Ok(Some(Value::Number(length.into())))
                     } else {
-                        Ok(Value::Null)
+                        Ok(None)
                     }
                 }
                 Err(err) => Err(format!("JSONPath解析错误 '{}': {}", base_path, err)),
@@ -156,9 +160,9 @@ impl JsonPathTemplate {
             match context.query(path) {
                 Ok(results) => {
                     if !results.is_empty() {
-                        Ok(results[0].clone())
+                        Ok(Some(results[0].clone()))
                     } else {
-                        Ok(Value::Null)
+                        Ok(None)
                     }
                 }
                 Err(err) => Err(format!("JSONPath解析错误 '{}': {}", path, err)),
@@ -179,7 +183,12 @@ impl JsonPathTemplate {
             let path = caps.get(1).unwrap().as_str();
             // 获取值并转换为字符串
             let value = Self::get_value(context, path)?;
-            let value_str = Self::value_to_string(&value);
+
+            let value_str = if let Some(value) = value {
+                Self::value_to_string(&value)
+            } else {
+                "undefined".to_string()
+            };
 
             // 替换模板中的变量
             result = result.replace(full_match, &value_str);

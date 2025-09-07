@@ -60,7 +60,7 @@ impl ConditionChainware {
         context: &Value,
     ) -> Result<Option<bool>, String> {
         // 检查基本比较运算符，按长度排序避免优先级问题
-        let basic_operators = [">=", "<=", "==", "!=", ">", "<"];
+        let basic_operators = [">=", "<=", "===", "==", "!=", ">", "<"];
         for &op in basic_operators.iter() {
             if let Some((left, right)) = condition.split_once(op) {
                 let left = left.trim();
@@ -72,14 +72,15 @@ impl ConditionChainware {
                 // 解析右侧值
                 let right_value = self.parse_value(right, context)?;
 
-                // 比较值
+                // 比较值（处理undefined情况）
                 return Ok(Some(match op {
-                    "==" => self.equals(&left_value, &right_value),
-                    "!=" => !self.equals(&left_value, &right_value),
-                    ">" => Self::compare(&left_value, &right_value) > 0,
-                    "<" => Self::compare(&left_value, &right_value) < 0,
-                    ">=" => Self::compare(&left_value, &right_value) >= 0,
-                    "<=" => Self::compare(&left_value, &right_value) <= 0,
+                    "==" => self.equals_optional(&left_value, &right_value),
+                    "===" => self.strict_equals_optional(&left_value, &right_value),
+                    "!=" => !self.equals_optional(&left_value, &right_value),
+                    ">" => Self::compare_optional(&left_value, &right_value) > 0,
+                    "<" => Self::compare_optional(&left_value, &right_value) < 0,
+                    ">=" => Self::compare_optional(&left_value, &right_value) >= 0,
+                    "<=" => Self::compare_optional(&left_value, &right_value) <= 0,
                     _ => false,
                 }));
             }
@@ -98,7 +99,7 @@ impl ConditionChainware {
 
             let field_value = self.resolve_path(field, context)?;
             let field_str = match &field_value {
-                Value::String(s) => s.as_str(),
+                Some(Value::String(s)) => s.as_str(),
                 _ => return Ok(Some(false)),
             };
 
@@ -106,7 +107,7 @@ impl ConditionChainware {
                 value_str[1..value_str.len() - 1].to_string()
             } else {
                 match self.resolve_path(value_str, context)? {
-                    Value::String(s) => s,
+                    Some(Value::String(s)) => s,
                     _ => return Ok(Some(false)),
                 }
             };
@@ -134,13 +135,13 @@ impl ConditionChainware {
             let value = self.resolve_path(field, context)?;
 
             let result = match operation {
-                "isString" => value.is_string(),
-                "isNumber" => value.is_number(),
-                "isBoolean" => value.is_boolean(),
-                "isObject" => value.is_object(),
-                "isArray" => value.is_array(),
-                "isNull" => value.is_null(),
-                "isEmpty" => self.is_empty(&value),
+                "isString" => value.as_ref().map(|v| v.is_string()).unwrap_or(false),
+                "isNumber" => value.as_ref().map(|v| v.is_number()).unwrap_or(false),
+                "isBoolean" => value.as_ref().map(|v| v.is_boolean()).unwrap_or(false),
+                "isObject" => value.as_ref().map(|v| v.is_object()).unwrap_or(false),
+                "isArray" => value.as_ref().map(|v| v.is_array()).unwrap_or(false),
+                "isNull" => value.as_ref().map(|v| v.is_null()).unwrap_or(false),
+                "isEmpty" => value.as_ref().map(|v| self.is_empty(v)).unwrap_or(true), // undefined视为空
                 _ => false,
             };
 
@@ -151,11 +152,12 @@ impl ConditionChainware {
         if let Some((path, length_condition)) = condition.split_once(".length ") {
             let value = self.resolve_path(path.trim(), context)?;
 
-            // 获取值的长度
+            // 获取值的长度（处理undefined情况）
             let length = match &value {
-                Value::String(s) => s.len() as i64,
-                Value::Array(a) => a.len() as i64,
-                Value::Object(o) => o.len() as i64,
+                Some(Value::String(s)) => s.len() as i64,
+                Some(Value::Array(a)) => a.len() as i64,
+                Some(Value::Object(o)) => o.len() as i64,
+                None => -1, // undefined视为长度为-1
                 _ => -1, // 其他类型没有长度概念
             };
 
@@ -187,7 +189,7 @@ impl ConditionChainware {
         // 如果是单独的路径，检查它是否为truthy值
         if !condition.contains(' ') {
             let value = self.resolve_path(condition.trim(), context)?;
-            return Ok(Some(self.is_truthy(&value)));
+            return Ok(Some(self.is_truthy_option(&value)));
         }
 
         // 不是简单条件表达式
@@ -233,7 +235,8 @@ impl ConditionChainware {
     /// 支持格式：
     /// - JSONPath: $（整个上下文）, $input（输入数据）, $input.data[0].field 等
     /// - 变量引用: ${input}, ${input.data[0].field} 等
-    fn resolve_path(&self, path: &str, context: &Value) -> Result<Value, String> {
+    ///   如果路径不存在，返回None表示undefined
+    fn resolve_path(&self, path: &str, context: &Value) -> Result<Option<Value>, String> {
         let trimmed_path = path.trim();
 
         // 处理字面量值
@@ -243,7 +246,7 @@ impl ConditionChainware {
                 .next()
                 .is_some_and(|c| c.is_alphabetic())
         {
-            return self.parse_literal(trimmed_path);
+            return self.parse_literal(trimmed_path).map(Some);
         }
 
         // 检查是否以字母开头的简单引用（隐式引用）
@@ -254,11 +257,17 @@ impl ConditionChainware {
         {
             // 默认将简单引用视为input字段下的路径
             let template = format!("$input.{}", trimmed_path);
-            return JsonPathTemplate::get_value(context, &template);
+            return match JsonPathTemplate::get_value(context, &template) {
+                Ok(value) => Ok(value),
+                Err(_) => Ok(None), // 路径不存在时返回None表示undefined
+            };
         }
 
         // 使用统一的JsonPathTemplate工具处理所有路径格式
-        JsonPathTemplate::get_value(context, trimmed_path)
+        match JsonPathTemplate::get_value(context, trimmed_path) {
+            Ok(value) => Ok(value),
+            Err(_) => Ok(None), // 路径不存在时返回None表示undefined
+        }
     }
 
     /// 解析字面量值
@@ -290,12 +299,25 @@ impl ConditionChainware {
     }
 
     /// 解析值（可能是字面量或路径）
-    fn parse_value(&self, value: &str, context: &Value) -> Result<Value, String> {
+    fn parse_value(&self, value: &str, context: &Value) -> Result<Option<Value>, String> {
         let trimmed_value = value.trim();
         
-        // 先尝试解析为字面量
+        // 检查是否为undefined字面量
+        if trimmed_value == "undefined" {
+            return Ok(None);
+        }
+        
+        // 先检查是否为字符串字面量（用单引号或双引号包围）
+        if (trimmed_value.starts_with('"') && trimmed_value.ends_with('"')) ||
+           (trimmed_value.starts_with('\'') && trimmed_value.ends_with('\'')) {
+            // 字符串字面量，去掉引号
+            let content = &trimmed_value[1..trimmed_value.len() - 1];
+            return Ok(Some(Value::String(content.to_string())));
+        }
+        
+        // 再尝试解析为其他字面量（数字、布尔值、null）
         if let Ok(literal_value) = self.parse_literal(trimmed_value) {
-            return Ok(literal_value);
+            return Ok(Some(literal_value));
         }
         
         // 如果是路径格式，直接解析
@@ -305,7 +327,10 @@ impl ConditionChainware {
         
         // 最后尝试作为字段路径
         let path = format!("$input.{}", trimmed_value);
-        JsonPathTemplate::get_value(context, &path)
+        match JsonPathTemplate::get_value(context, &path) {
+            Ok(value) => Ok(value),
+            Err(_) => Ok(None), // 路径不存在时返回None表示undefined
+        }
     }
 
     /// 比较两个值是否相等
@@ -343,6 +368,57 @@ impl ConditionChainware {
                     || (!*b && (s == "false" || s == "no" || s == "0"))
             }
             _ => false, // 不同类型的值不相等
+        }
+    }
+
+    /// 严格比较两个值是否相等（不进行类型转换）
+    fn strict_equals(&self, a: &Value, b: &Value) -> bool {
+        match (a, b) {
+            (Value::String(a), Value::String(b)) => a == b,
+            (Value::Number(a), Value::Number(b)) => {
+                // 数字严格比较，必须类型完全匹配
+                if let (Some(a_i64), Some(b_i64)) = (a.as_i64(), b.as_i64()) {
+                    a_i64 == b_i64
+                } else if let (Some(a_f64), Some(b_f64)) = (a.as_f64(), b.as_f64()) {
+                    (a_f64 - b_f64).abs() < f64::EPSILON
+                } else {
+                    false // 不同类型的数字不相等
+                }
+            }
+            (Value::Bool(a), Value::Bool(b)) => a == b,
+            (Value::Null, Value::Null) => true,
+            // 数组和对象使用默认比较逻辑
+            (Value::Array(a), Value::Array(b)) => a == b,
+            (Value::Object(a), Value::Object(b)) => a == b,
+            _ => false, // 不同类型的值不相等
+        }
+    }
+
+    /// 比较两个可选值是否相等（处理undefined情况）
+    fn equals_optional(&self, a: &Option<Value>, b: &Option<Value>) -> bool {
+        match (a, b) {
+            (Some(a), Some(b)) => self.equals(a, b),
+            (None, None) => true, // undefined == undefined
+            _ => false, // undefined != defined or defined != undefined
+        }
+    }
+
+    /// 严格比较两个可选值是否相等（处理undefined情况）
+    fn strict_equals_optional(&self, a: &Option<Value>, b: &Option<Value>) -> bool {
+        match (a, b) {
+            (Some(a), Some(b)) => self.strict_equals(a, b),
+            (None, None) => true, // undefined === undefined
+            _ => false, // undefined !== defined or defined !== undefined
+        }
+    }
+
+    /// 比较两个可选值的大小（处理undefined情况）
+    fn compare_optional(a: &Option<Value>, b: &Option<Value>) -> i8 {
+        match (a, b) {
+            (Some(a), Some(b)) => Self::compare(a, b),
+            (None, None) => 0, // undefined == undefined
+            (Some(_), None) => 1, // defined > undefined
+            (None, Some(_)) => -1, // undefined < defined
         }
     }
 
@@ -424,6 +500,16 @@ impl ConditionChainware {
             Value::String(s) => !s.is_empty() && s != "false" && s != "0",
             Value::Array(a) => !a.is_empty(),
             Value::Object(o) => !o.is_empty(),
+        }
+    }
+}
+
+impl ConditionChainware {
+    /// 检查Option<Value>是否为truthy
+    fn is_truthy_option(&self, value: &Option<Value>) -> bool {
+        match value {
+            Some(v) => self.is_truthy(v),
+            None => false,
         }
     }
 }
